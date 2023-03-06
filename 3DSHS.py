@@ -1,17 +1,18 @@
 import colorama
+from sys import exit
 import requests
 import wget
 import shutil
 import os
+import json
+import glob
 from zipfile import ZipFile
 
 ### VARS AND CONSTS ###
-AVALIABLE={"1":"kartdlphax"}
+DOWNLOADDIR="./tmp/"
+AVALIABLE=glob.glob("packs/*.json",recursive=True)
 REGIONS=["EUR","USA","JPN"]
-
-
-### INITS ###
-colorama.init()
+JSONVERSION="1.0"
 
 ### USEFUL FUNCTIONS ###
 def CreateFolder(path):
@@ -19,129 +20,78 @@ def CreateFolder(path):
         os.makedirs(path)
 
 
+### INITS ###
+colorama.init()
+CreateFolder(DOWNLOADDIR)
+
+
+
+
 
 ### PROMPT FOR METHOD ###
-method=""
-while not method in AVALIABLE:
+method=0
+while not (method<=len(AVALIABLE) and method>0):
+    
     print("Avaliable methods:")
-    for i in AVALIABLE:
-        print(str(i)+". "+str(AVALIABLE[i]))
-    method=input("Choose a method (HOW TO CHOOSE A METHOD: https://3ds.hacks.guide/get-started): ")
-    if not method in AVALIABLE:
-        print(colorama.Fore.RED+"The option "+method+" does not exist!")
-        print("The only avaliable options are: "+", ".join(AVALIABLE)+colorama.Style.RESET_ALL)
-
-if method=="1":
-    print("Please follow the guide at: https://3ds.hacks.guide/installing-boot9strap-(kartdlphax) for instructions")
-    print(colorama.Fore.BLUE+"[INFO] Make sure the game region is correct!"+colorama.Style.RESET_ALL)
-    region=""
-    while not region in REGIONS:
-        region=input("Mario Kart 7 Cartridge or Software Region (EUR,USA,JPN): ").upper()
-    print("Region set to: "+colorama.Fore.GREEN+region+colorama.Style.RESET_ALL)
-    print(colorama.Fore.BLUE+"[INFO] Make sure to plug in the SOURCE 3DS SD Card!"+colorama.Style.RESET_ALL)
-    workingcard=input("SOURCE 3DS SD Card directory: ").replace("\\", "/")
-    if not workingcard[-1]=="/":
-        workingcard+="/"
     
-    print(colorama.Fore.RED+"DO NOT UNPLUG THE SD CARD!"+colorama.Style.RESET_ALL)
+    for i,string in enumerate(AVALIABLE):
+        workingfile=AVALIABLE[i-1]
+        hackdata=json.load(open(workingfile,"r"))
+        print(str(i+1)+". "+hackdata["general-data"]["name"]+" (pack by "+hackdata["general-data"]["AUTHOR"]+")")
+    
+    method=int(input("Choose a method (HOW TO CHOOSE A METHOD: https://3ds.hacks.guide/get-started): "))
+    
+    if not (method<=len(AVALIABLE) and method>0):
+        print(colorama.Fore.RED+"The option "+str(method)+" does not exist!")
+        print("The only avaliable options are: "+", ".join([str(x+1) for x in range(len(AVALIABLE))])+colorama.Style.RESET_ALL)
 
-    # PLUGIN
-    print("Downloading kartdlphax...")
-    response = requests.get("https://api.github.com/repos/PabloMK7/kartdlphax/releases/latest")
-    wget.download(response.json()["assets"][0]["browser_download_url"],".")
-    print("\nMoving kartdlphax...")
+workingfile=AVALIABLE[method-1]
 
-    # SETTING FOLDER BY REGION
-    if region==REGIONS[0]:
-        regpath="luma/plugins/0004000000030700/"
-    elif region==REGIONS[1]:
-        regpath="luma/plugins/0004000000030800/"
+hackdata=json.load(open(workingfile,"r"))
+
+print(f'For reference on how to install hb with {hackdata["general-data"]["name"]} you can check: {colorama.Fore.BLUE}{hackdata["general-data"]["guide-page"]}{colorama.Style.RESET_ALL}')
+print(f'{colorama.Fore.BLUE}[INFO] You need {len(hackdata["general-data"]["SDs"])} {"SD" if len(hackdata["general-data"]["SDs"])==1 else "SDs"} to perform this hack{colorama.Style.RESET_ALL}')
+
+appcount=0
+workingcard=""
+
+for application in hackdata["downloads"]: # we define application as any file that gets downloaded and installed
+    if appcount in hackdata["general-data"]["SDs"].values(): # We run the dir change anytime
+        n=list(hackdata["general-data"]["SDs"].keys())[list(hackdata["general-data"]["SDs"].values()).index(appcount)]
+        workingcard=input(f"\nPath to the {n} SD Card: ")
+        if workingcard=="":
+            print(f'{colorama.Fore.RED}No SD card directory inserted!{colorama.Style.RESET_ALL}')
+            exit(2)
+    print(f"\nDownloading {application}...")
+    if hackdata["downloads"][application]["direct"]:
+        wget.download(hackdata["downloads"][application]["url"],DOWNLOADDIR)
     else:
-        regpath="luma/plugins/0004000000030600/"
+        response = requests.get(hackdata["downloads"][application]["url"])
+        if response.ok:
+            wget.download(response.json()["assets"][hackdata["downloads"][application]["download-index"]]["browser_download_url"],DOWNLOADDIR)
+        else:
+            print(f'{colorama.Fore.RED}response for: {hackdata["downloads"][application]["url"]} is not OK.{colorama.Style.RESET_ALL}')
+            exit(1)
     
-    CreateFolder(workingcard+regpath)
-    shutil.move("plugin.3gx",workingcard+regpath+"plugin.3gx")
-    print(colorama.Fore.GREEN+"Kartdlphax plugin installed!"+colorama.Style.RESET_ALL+"\n")
-
-
-    # LUMA 3DS FOR 3GX FILES
-    print("Downloading Luma 3DS 3GX Loader...")
-    response = requests.get("https://api.github.com/repos/Nanquitas/Luma3DS/releases/latest")
-    wget.download(response.json()["assets"][0]["browser_download_url"],".")
-    print("\nMoving Luma 3DS 3GX Loader...")
-    shutil.move("boot.firm",workingcard+"boot.firm")
-    print(colorama.Fore.GREEN+"Luma 3DS 3GX Loader installed!"+colorama.Style.RESET_ALL+"\n")
-
-    # CHANGE WORKING 3DS
-    print(colorama.Fore.MAGENTA+"SOURCE 3DS READY TO GO!"+colorama.Style.RESET_ALL)
-    print("Now that you are done with the SOURCE 3DS, you can unplug the SD and plug in the TARGET 3DS SD")
-    workingcard=input("TARGET 3DS SD Card directory: ").replace("\\", "/")
-    if not workingcard[-1]=="/":
-        workingcard+="/"
-    print(colorama.Fore.BLUE+"[INFO] The TARGET 3DS requires more processing as it uncompresses zips and selects files, do not touch any folders while the process is running"+colorama.Style.RESET_ALL)
-    print(colorama.Fore.RED+"DO NOT UNPLUG THE SD CARD!"+colorama.Style.RESET_ALL)
+    if hackdata["downloads"][application]["iszip"]: # if the app is a zip, we use the zipfile data to unzip it
+        print(f"\nUnpacking {application}...")
+        for zipf in hackdata["downloads"][application]["zipfiles"]:
+            with ZipFile(DOWNLOADDIR+zipf,"r") as zipObj:
+                for zipcontent in hackdata["downloads"][application]["zipfiles"][zipf]:
+                    zipObj.extract(zipcontent,DOWNLOADDIR+hackdata["downloads"][application]["zipfiles"][zipf][zipcontent])
     
-    # SAFEB9SInstaller
-    print("Downloading SafeB9SInstaller...")
-    wget.download("https://github.com/d0k3/SafeB9SInstaller/releases/download/v0.0.7/SafeB9SInstaller-20170605-122940.zip")
-    print("\nExtracting SafeB9SInstaller...")
-    with ZipFile("SafeB9SInstaller-20170605-122940.zip","r") as zipObj:
-        zipObj.extract("SafeB9SInstaller.bin",".")
-    print("Moving SafeB9SInstaller...")
-    shutil.move("SafeB9SInstaller.bin",workingcard+"SafeB9SInstaller.bin")
-    print("Cleaning up SafeB9SInstaller...")
-    os.remove("SafeB9SInstaller-20170605-122940.zip")
-    print(colorama.Fore.GREEN+"SafeB9SInstaller installed!"+colorama.Style.RESET_ALL+"\n")
+    for f in hackdata["downloads"][application]["files"]:
+        if hackdata["downloads"][application]["region-dependent"]: # here we first check for the region and then change the folder according to it
+            region=""
+            while region not in REGIONS:
+                region=input(f"\nIt looks like {colorama.Fore.YELLOW}{application}{colorama.Style.RESET_ALL} needs a region to work (check the guide for more details): ").upper()
+                if region not in REGIONS:
+                    print(f"the \"{region}\" region does not exist!")
+            CreateFolder("/".join(f[region]["destination"].replace("&",workingcard).replace("\\","/").split("/")[:-1]))
+            shutil.move(DOWNLOADDIR+f[region]["source"],f[region]["destination"].replace("&",workingcard))
+        else:
+            CreateFolder("/".join(f["destination"].replace("&",workingcard).replace("\\","/").split("/")[:-1]))
+            shutil.move(DOWNLOADDIR+f["source"],f["destination"].replace("&",workingcard)) # here we move the files into the current card
+    appcount+=1 # one application was installed
 
-    #Luma 3DS
-    print("Downloading Luma 3DS...")
-    response=requests.get("https://api.github.com/repos/LumaTeam/Luma3DS/releases/latest")
-    wget.download(response.json()["assets"][0]["browser_download_url"],".")
-    print("\nExtracting Luma 3DS...")
-    zips=[x for x in os.listdir() if x[-3:] == 'zip']
-    with ZipFile(zips[0],"r") as zipObj:
-        zipObj.extract("boot.firm",".")
-        zipObj.extract("boot.3dsx",".")
-    shutil.move("boot.firm",workingcard+"boot.firm")
-    shutil.move("boot.3dsx",workingcard+"boot.3dsx")
-    print("Cleaning up Luma 3DS...")
-    os.remove(zips[0])
-    del zips
-    print(colorama.Fore.GREEN+"Luma 3DS installed!"+colorama.Style.RESET_ALL+"\n")
-
-    # boot9strap
-    print("Downloading boot9strap...")
-    wget.download("https://github.com/SciresM/boot9strap/releases/download/1.4/boot9strap-1.4.zip")
-    print("\nExtracting boot9strap...")
-    with ZipFile("boot9strap-1.4.zip","r") as zipObj:
-        zipObj.extract("boot9strap.firm",".")
-        zipObj.extract("boot9strap.firm.sha",".")
-    print("Moving boot9strap...")
-    CreateFolder(workingcard+"boot9strap/")
-    shutil.move("boot9strap.firm",workingcard+"boot9strap/boot9strap.firm")
-    shutil.move("boot9strap.firm.sha",workingcard+"boot9strap/boot9strap.firm.sha")
-    print("Cleaning up boot9strap...")
-    os.remove("boot9strap-1.4.zip")
-    print(colorama.Fore.GREEN+"boot9strap installed!"+colorama.Style.RESET_ALL+"\n")
-
-    # unSAFE_MODE
-    print("Downloading unSAFE_MODE...")
-    response=requests.get("https://api.github.com/repos/zoogie/unSAFE_MODE/releases/latest")
-    wget.download(response.json()["assets"][0]["browser_download_url"],".")
-    print("\nExtracting unSAFE_MODE...")
-    zips=[x for x in os.listdir() if x[-3:] == 'zip']
-    with ZipFile(zips[0],"r") as zipObj:
-        zipObj.extract("usm.bin",".")
-        zipObj.extract("slotTool/slotTool.xml",".")
-        zipObj.extract("slotTool/slotTool.3dsx",".")
-    shutil.move("usm.bin",workingcard+"usm.bin")
-    CreateFolder(workingcard+"3ds/slotTool/")
-    shutil.move("slotTool/slotTool.xml",workingcard+"3ds/slotTool/slotTool.xml")
-    shutil.move("slotTool/slotTool.3dsx",workingcard+"3ds/slotTool/slotTool.3dsx")
-    print("Cleaning up unSAFE_MODE...")
-    os.remove(zips[0])
-    os.removedirs("slotTool")
-    del zips
-    print(colorama.Fore.GREEN+"unSAFE_MODE installed!"+colorama.Style.RESET_ALL+"\n")
-
-    print("DEFAULT APPS COMING SOON, THE TARGET 3DS IS READY!")
+shutil.rmtree(DOWNLOADDIR)
